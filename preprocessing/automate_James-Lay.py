@@ -1,7 +1,6 @@
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 import pandas as pd
-import os
 
 def preprocess_data(data, target_column):
     # Menentukan fitur numerik dan kategorikal
