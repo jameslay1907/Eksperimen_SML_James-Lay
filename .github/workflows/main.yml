@@ -1,46 +1,48 @@
-name: CI MLflow
- 
+name: Automated Preprocessing
+
 on:
   push:
     branches:
-      - master
-  pull_request:
-    branches:
-      - master
- 
-env:
-  CSV_URL: "ai_student_impact_raw.csv"
-  TARGET_VAR: "quality"
-  ALPHA: 0.5
-  L1_RATIO: 0.5
-  RANDOM_STATE: 42
- 
+      - main
+    paths-ignore:
+      - "preprocessing/ai_student_impact_preprocessing/*.csv"
 jobs:
-  build:
+  preprocess:
     runs-on: ubuntu-latest
- 
+
+    permissions:
+      contents: write
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE
-      - uses: actions/checkout@v3
- 
-      # Setup Python 3.12.7
-      - name: Set up Python 3.12.7
-        uses: actions/setup-python@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12.7"
-      
-      # Check Env Variables
-      - name: Check Env
-        run: |
-          echo $CSV_URL
- 
-      # Install mlflow
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mlflow
-      
-      # Run as a mlflow project
-      - name: Run mlflow project
+          pip install pandas scikit-learn
+
+      - name: Run preprocessing
         run: |
-          mlflow run Project --env-manager=local
+          python preprocessing/automate_James-Lay.py
+
+      - name: Commit generated datasets
+        run: |
+          git config --global user.name ${{ secrets.username }}
+          git config --global user.email ${{ secrets.email }}
+
+          git add preprocessing/ai_student_impact_preprocessing/
+
+          if git diff --staged --quiet; then
+            echo "No changes detected."
+          else
+            git commit -m "Update preprocessed datasets"
+            git push
+          fi
