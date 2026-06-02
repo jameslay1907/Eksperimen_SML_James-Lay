@@ -1,51 +1,59 @@
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from joblib import dump
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 import pandas as pd
+import os
 
-def preprocess_data(data, target_column, save_path, file_path):
+def preprocess_data(data, target_column):
     # Menentukan fitur numerik dan kategorikal
-    numeric_feature  = data.select_dtypes(include=['float64', 'int64']).columns.tolist()
-    categorical_features = data.select_dtypes(include=['object']).columns.tolist()
-    column_names = data.columns.drop(target_column)
+    data = data.drop(columns=['Student_ID'])
+    numeric_features  = data.select_dtypes(include=['float64', 'int64']).columns.to_list()
+    categorical_features = data.select_dtypes(include=['object']).columns.to_list()
     
-    df_header = pd.DataFrame(columns=column_names)
+    if target_column in numeric_features:
+        numeric_features.remove(target_column)
 
-    df_header.to_csv(file_path, index=False)
-    print(f"Nama kolom berhasil disimpan ke: {file_path}")
-
-    if target_column in numeric_feature:
-        numeric_feature.remove(target_column)
     if target_column in categorical_features:
         categorical_features.remove(target_column)
     
-    # Pipeline numerik
-    numeric_transformer = Pipeline(steps=[
-        ('scaler', StandardScaler())
-    ])
+    # Outlier
+    Q1 = data[numeric_features].quantile(0.25)
+    Q3 = data[numeric_features].quantile(0.75)
+    IQR = Q3 - Q1
 
-    # Pipeline kategorikal
-    categorical_transformer = Pipeline(steps=[
-        ('encoder', LabelEncoder())
-    ])
+    condition = ~((data[numeric_features] < (Q1 - 1.5 * IQR)) | (data[numeric_features] > (Q3 + 1.5 * IQR))).any(axis=1)
 
-    preprocessor = ColumnTransformer(
-        transformer=[
-            ('num', numeric_transformer, numeric_feature),
-            ('cat', categorical_transformer, categorical_features)
-        ]
-    )
+    data = data.loc[condition].copy()
 
+    # Encoding
+    label_encoder = LabelEncoder()
+
+    for column in categorical_features:
+        data[column] = label_encoder.fit_transform(data[column])
+
+    target_column_mapping = {"Low":0, "Medium":1, "High":2}
+
+    data[target_column] = data[target_column].map(target_column_mapping)
+
+    # Split Data
     X = data.drop(columns=[target_column])
     y = data[target_column]
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    X_train = preprocessor.fit_transform(X_train)
-    X_test = preprocessor.transform(X_test)
+    # Scaling Numerical Features
+    scaler = StandardScaler()
 
-    dump(preprocessor, save_path)
+    X_train[numeric_features] = scaler.fit_transform(X_train[numeric_features])
+    X_test[numeric_features] = scaler.transform(X_test[numeric_features])
 
     return X_train, X_test, y_train, y_test
+
+if __name__ == "__main__":
+    data = pd.read_csv('ai_student_impact_raw.csv')
+    X_train, X_test, y_train, y_test = preprocess_data(data, 'Burnout_Risk_Level')
+    save_path = 'preprocessing/ai_student_impact_preprocessing'
+    X_train.to_csv(f'{save_path}/X_train.csv', index=False)
+    X_test.to_csv(f'{save_path}/X_test.csv', index=False)
+    y_train.to_csv(f'{save_path}/y_train.csv', index=False)
+    y_test.to_csv(f'{save_path}/y_test.csv', index=False)
+    
